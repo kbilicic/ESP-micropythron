@@ -1,8 +1,3 @@
-
-
-
-
-
 #include <Wire.h>
 #include <math.h>
 #include <font.h>
@@ -13,11 +8,10 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
 #include <ArduinoJson.h>
-
-
 #include "DHT.h"
-
 #include "gpio.h"
+
+
 extern "C" {
 #include "user_interface.h"
   uint16 readvdd33(void);
@@ -157,8 +151,6 @@ void drawNightMode(int x, int y) {
     display.drawXbm(x, y, moon_width, moon_height, moon_bits);
 }
 
-
-
 void printLargeTemp(uint8_t leftOffset, float t, float h) {
     String tempString;
     String humString;
@@ -185,29 +177,26 @@ void drawStatusBarLeft() {
     display.drawLine(0,0, 127, 0);
     display.drawLine(127,0, 127, 63);
     display.drawLine(0,63, 127, 63);
-
-
 }
 
 bool sleep = false;
 
-void goToLightSleep()
-{
-  if (!sleep)
-  {
-    Serial.println("switching off Wifi Modem and CPU");
-    //stop any clients
-    ///thisclient.stop();
-    delay(1000);
-    wifi_set_sleep_type(LIGHT_SLEEP_T);
-    WiFi.disconnect();
-    WiFi.mode(WIFI_OFF);
-    // how do we call this: 
-    //gpio_pin_wakeup_enable(GPIO_ID_PIN(switchPin),GPIO_PIN_INTR_NEGEDGE);
-    //wifi_fpm_open();
-    //wifi_fpm_do_sleep(26843455);
-    //if(WiFi.forceSleepBegin(26843455)) sleep = true;
-  }
+void goToLightSleep() {
+    if (!sleep)
+    {
+        Serial.println("switching off Wifi Modem and CPU");
+        //stop any clients
+        ///thisclient.stop();
+        delay(1000);
+        wifi_set_sleep_type(LIGHT_SLEEP_T);
+        WiFi.disconnect();
+        WiFi.mode(WIFI_OFF);
+        // how do we call this: 
+        //gpio_pin_wakeup_enable(GPIO_ID_PIN(switchPin),GPIO_PIN_INTR_NEGEDGE);
+        //wifi_fpm_open();
+        //wifi_fpm_do_sleep(26843455);
+        //if(WiFi.forceSleepBegin(26843455)) sleep = true;
+    }
 }
 
 String generateJsonObject(String measure, String value) {
