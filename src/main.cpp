@@ -1,3 +1,5 @@
+#define DEBUG_ESP_SSL
+
 #include <Wire.h>
 #include <math.h>
 #include <font.h>
@@ -12,10 +14,10 @@
 #include "gpio.h"
 #include "FS.h"
 #include <WebSocketsClient.h>
-//#include <Hash.h>
 #include "fauxmoESP.h"
 #include <OneButton.h>
 #include <Rotary.h>
+#include <Hash.h>
 
 WebSocketsClient webSocket;
 
@@ -29,10 +31,13 @@ extern "C" {
 
 
 typedef struct ThermostatSettings {
-    bool on; // on,off
-    String mode; // auto, manual
+    String on; // on,off
+    //String mode; // auto, manual
+    String mode; //"off,heat,cool,on"
     String type; // heat, cool. (In the future add ventilate, moisturize, dryout)
     uint8_t targetTemp; // 23
+    uint8_t targetTempLow;
+    uint8_t targetTempHigh;
     uint8_t oldTargetTemp;
     String ssid;
     String password;
@@ -71,10 +76,12 @@ void changeTemp(uint8_t newTemp) {
 
 //const char* ssid = "CloudSenseMobile";
 //const char* password = "CloudPA55-201707";
-const char* ssid = "octofus";
-const char* password = "990999997995";
-const char* deviceId = "DemoThermostat";
+// DEFAULT VALUES
+char* ssid = "kruno";
+char* password = "arduino1";
+char* deviceId = "DemoThermostat";
 
+#define DEBUG_ESP_PORT
 
 #define LDR_PIN A0
 #define DHTPIN D5    // what digital pin we're connected to
@@ -87,7 +94,7 @@ QRcode qrcode (&display);
 DHT dht(DHTPIN, DHTTYPE);
 
 
-int32_t getRSSI(const char * target_ssid) {
+int32_t getRSSI(String target_ssid) {
     byte available_networks = WiFi.scanNetworks();
 
     for (int network = 0; network < available_networks; network++) {
@@ -120,6 +127,20 @@ void drawSignalStrenth(int x, int y, uint8_t bars, bool connected) {
     if(bars > 2 && connected) display.drawLine(x + 4, y + 4, x+12, y + 4);
     if(bars > 1 && connected) display.drawLine(x + 6, y + 6, x+10, y + 6);
     if(bars > 0 && connected) display.drawLine(x + 8,y + 8, x+8, y+ 8);
+
+    if(!connected) {
+        display.drawLine(x,y, x+9, y+9);
+        display.drawLine(x,y+9, x+9, y);
+    }
+}
+
+
+void drawSignalStrenthLarge(int x, int y, uint8_t bars, bool connected) {
+    if(bars > 4 && connected) display.drawLine(x, y, x+16, y);
+    if(bars > 3 && connected) display.drawLine(x + 2, y + 2, 29, 5);
+    if(bars > 2 && connected) display.drawLine(x + 6, y + 9, 21, 5);
+    if(bars > 1 && connected) display.drawLine(x + 10, y + 16, 13, 5);
+    if(bars > 0 && connected) display.fillRect(x + 14,y + 23, 5, 5);
 
     if(!connected) {
         display.drawLine(x,y, x+9, y+9);
@@ -261,8 +282,29 @@ void goToLightSleep() {
     }
 }
 
+
+String generateJsonStatusObject(String deviceSn, String dateTime, String targetTemp, String targetLowTemp, String targetHighTemp, String temp, String hum, String mode) {
+    StaticJsonBuffer<200> jsonBuffer;
+    
+    JsonObject& root = jsonBuffer.createObject();
+    root["sn"] = deviceSn;
+    root["time"] = dateTime;
+    root["temp"] = temp;
+    root["hum"] = hum;
+    root["target_temp"] = targetTemp;
+    root["target_temp_low"] = targetLowTemp;
+    root["target_temp_high"] = targetHighTemp;
+    root["mode"] = mode;
+
+    char buffer[200];
+    root.printTo((char*)buffer, root.measureLength() + 1);
+
+    return String(buffer);
+}
+
+
 String generateJsonObject2(String deviceSn, String dateTime, String temp, String hum) {
-    StaticJsonBuffer<1000> jsonBuffer;
+    StaticJsonBuffer<200> jsonBuffer;
     
     JsonObject& root = jsonBuffer.createObject();
     root["sn"] = deviceSn;
@@ -270,7 +312,7 @@ String generateJsonObject2(String deviceSn, String dateTime, String temp, String
     root["temp"] = temp;
     root["hum"] = hum;
 
-    char buffer[1000];
+    char buffer[200];
     root.printTo((char*)buffer, root.measureLength() + 1);
 
     return String(buffer);
@@ -295,7 +337,7 @@ void printTargetTemp() {
     display.fillRect(0, 0, 32,24);
     display.setColor(BLACK);
     display.setFont(Lato_Semibold_20);
-    if(settings.on)
+    if(settings.on == "true")
         display.drawString(1, 0, String(settings.targetTemp) + "°");
     else
     {
@@ -332,18 +374,19 @@ bool loadSettings(ThermostatSettings &settings) {
         settings.type = root["type"].asString();
         if(settings.type == NULL)
             settings.type = "heat";
-        settings.on = root["on"];
+        settings.on = root["on"].asString();
         settings.apiUrl = root["apiUrl"].asString();
         settings.ssid = root["ssid"].asString();
         settings.password = root["password"].asString();
 
-        Serial.println(settings.targetTemp);
-        Serial.println(settings.mode);
-        Serial.println(settings.type);
-        Serial.println(settings.on);
-        Serial.println(settings.apiUrl);
-        Serial.println(settings.ssid);
-        Serial.println(settings.password);
+        Serial.println("Loaded settings: ");
+        Serial.println("settings.targetTemp = " + settings.targetTemp);
+        Serial.println("settings.mode = " + settings.mode);
+        Serial.println("settings.type = " + settings.type);
+        Serial.println("settings.on = " + settings.on);
+        Serial.println("settings.apiUrl = " + settings.apiUrl);
+        Serial.println("settings.ssid = " + settings.ssid);
+        Serial.println("settings.password = " + settings.password);
     }
 
     settingsFile.close();
@@ -371,7 +414,7 @@ bool saveSettingsFile(ThermostatSettings &settings) {
 }
 
 void turnBoilerOnOff() {
-    if(!settings.on)
+    if(settings.on == "false")
         status.running = false;
 
     if(status.running)
@@ -380,31 +423,50 @@ void turnBoilerOnOff() {
         digitalWrite(D0, HIGH);
 }
 
-void turnHeatingOnOff(bool isOn) {
+void turnHeatingOnOff(String isOn) {
+    Serial.println("turnHeatingOnOff");
     settingsChanged = true;
     settings.on = isOn;
+    Serial.println("settings.on = " + settings.on);
     turnBoilerOnOff();
 }
 
 void processPayload(uint8_t *payload) {
-    StaticJsonBuffer<200> jsonBuffer;
+    StaticJsonBuffer<300> jsonBuffer;
+    jsonBuffer.clear();
     JsonObject& jsonObj = jsonBuffer.parseObject(payload);
     if (!jsonObj.success()) {
         Serial.println("parseObject() failed");
         return;
     } else {
-        if(jsonObj["temperature"] != NULL) {
-            //settings.targetTemp = jsonObj["temperature"];
-            changeTemp(jsonObj["temperature"]);
-        }
-        if(jsonObj["mode"] != NULL) {
-            settings.mode = jsonObj["mode"].asString();   // auto, manual
-        }
-        if(jsonObj["type"] != NULL) {
-            settings.type = jsonObj["type"].asString();    // heat, cool. (In the future add ventilate, moisturize, dryout)
-        }
+        String temp = jsonObj["temp"].asString();
+        String mode = jsonObj["mode"].asString();
+        String type = jsonObj["type"].asString();
+        String status_on = jsonObj["on"].asString();
 
-        turnHeatingOnOff(bool(jsonObj["on"]));
+        Serial.println("temp: " + temp);
+        Serial.println("mode: " + mode);
+        Serial.println("type: " + type);
+        Serial.println("status_on: " + status_on);
+
+        if(temp != NULL) {
+            //settings.targetTemp = jsonObj["temperature"];
+            changeTemp(jsonObj["temp"]);
+            Serial.println("temp changed to: " + temp);
+        }
+        if(mode != NULL) {
+            settings.mode = mode;   // auto, manual
+            Serial.println("mode changed to: " + mode);
+        }
+        if(type != NULL) {
+            settings.type = type;    // heat, cool. (In the future add ventilate, moisturize, dryout)
+            Serial.println("type changed to: " + type);
+        }
+        if(status_on != NULL) {
+            Serial.println("on changed to: " + status_on);
+            settings.on = status_on;
+            turnHeatingOnOff(status_on);
+        }
     }
 }
 
@@ -413,24 +475,23 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED:
             status.webSocketConnected = false;
-            Serial.printf("[WSc] Disconnected!\n");
+            Serial.printf("[WS] Disconnected!\n");
             break;
-        case WStype_CONNECTED: {
+        case WStype_CONNECTED:
             status.webSocketConnected = true;
-            Serial.printf("[WSc] Connected to url: %s\n", payload);
+            Serial.printf("[WS] Connected to url: %s\n", payload);
             // send message to server when Connected
-            
-        }
+            webSocket.sendTXT("{ \"sn\" : \"1234567890\" }");
             break;
         case WStype_TEXT:
-            Serial.printf("[WSc] get text: %s\n", payload);
+            Serial.printf("[WS] data from WS server: %s\n", payload);
             processPayload(payload);
 
             // send message to server
             // webSocket.sendTXT("message here");
             break;
         case WStype_BIN:
-            Serial.printf("[WSc] get binary length: %u\n", length);
+            Serial.printf("[WS] get binary length: %u\n", length);
             hexdump(payload, length);
 
             // send data to server
@@ -449,8 +510,8 @@ const char * server = "api.thingspeak.com";
 uint16_t port = 80;
 String apiKey = "39Y08CVP5FJVM9OZ";
 
-uint32_t intervalDurationMs = 10000;
-uint32_t intervalsSendToServer = 20000;
+uint32_t intervalDurationMs = 30000;
+uint32_t intervalsSendToServer = 30000;
 bool lastSendToServerSuccess = true;
 unsigned long lastEvent = 0;
 unsigned long lastServerEvent = millis();
@@ -477,7 +538,7 @@ void loopThermostat() {
                 display.drawString(35, verticalOff, String(settings.oldTargetTemp));
                 uint16_t unitOffset1 = display.getStringWidth(String(settings.oldTargetTemp));
                 display.setFont(Lato_Thin_16);
-                display.drawString(35 + unitOffset1, 8, "°C");
+                display.drawString(35 + unitOffset1, 6, "°C");
                 display.display();
             }
 
@@ -488,7 +549,7 @@ void loopThermostat() {
                 display.drawString(35, verticalOff, String(settings.targetTemp));
                 uint16_t unitOffset1 = display.getStringWidth(String(settings.targetTemp));
                 display.setFont(Lato_Thin_16);
-                display.drawString(35 + unitOffset1, 8, "°C");
+                display.drawString(35 + unitOffset1, 6, "°C");
                 display.display();
             }
 
@@ -501,7 +562,7 @@ void loopThermostat() {
                 display.drawString(35, verticalOff, String(settings.oldTargetTemp));
                 uint16_t unitOffset1 = display.getStringWidth(String(settings.oldTargetTemp));
                 display.setFont(Lato_Thin_16);
-                display.drawString(35 + unitOffset1, 8, "°C");
+                display.drawString(35 + unitOffset1, 6, "°C");
                 display.display();
             }
 
@@ -512,7 +573,7 @@ void loopThermostat() {
                 display.drawString(35, verticalOff, String(settings.targetTemp));
                 uint16_t unitOffset1 = display.getStringWidth(String(settings.targetTemp));
                 display.setFont(Lato_Thin_16);
-                display.drawString(35 + unitOffset1, 8, "°C");
+                display.drawString(35 + unitOffset1, 6, "°C");
                 display.display();
             }
 
@@ -535,22 +596,20 @@ void loopThermostat() {
 
     if(lastServerEvent + intervalsSendToServer < millis())
     {
-        Serial.println("Period ended... should send to server");
+        //Serial.println("Period ended... should send to server");
         lastServerEvent = millis();
         sendToServer = true;
         dataChanged = true;
     }
-
     if(lastEvent + intervalDurationMs < millis())
-    {
-        Serial.println("Period ended... processing");
+    { 
+        //Serial.println("Period ended... processing");
         lastEvent = millis();
         processData = true;
         dataChanged = true;
     }
 
-    if(settings.on && dataChanged || settingsChanged) {
-        Serial.println("thermostat is on...");
+    if(settings.on == "true" && dataChanged || settingsChanged) {
         if(settings.type == "heat" && (tempChanged || settingsChanged)) {
             Serial.println("heating changed...");
             if(status.running) {
@@ -567,7 +626,7 @@ void loopThermostat() {
                 }
             }
 
-            Serial.println("Running: " + status.running);
+            Serial.println("Running: " + String(status.running));
         } else if (settings.type == "cool" && (tempChanged || settingsChanged)) {
             if(temp > (float)settings.targetTemp + 1) {
                 status.running = true;
@@ -588,7 +647,7 @@ void loopThermostat() {
         printLargeTemp(40, temp, hum);
     }
     
-    if(settings.on && processData || dataChanged) {
+    if(settings.on == "true" && processData || dataChanged) {
         lastEvent = millis();
 
         float t = dht.readTemperature();
@@ -614,11 +673,12 @@ void loopThermostat() {
         status.temperature = temp;
         status.humidity = hum;
     
-        int32_t db = getRSSI(ssid);
+        int32_t db = getRSSI(settings.ssid);
         uint8_t bars = signalStrength(db);
         drawSignalStrenth(92,48, bars, WiFi.status() == WL_CONNECTED);
 
         
+        sendToServer = false;
         if(sendToServer && dataChanged) {
 
             if(WiFi.status()== WL_CONNECTED){
@@ -628,11 +688,11 @@ void loopThermostat() {
                 Serial.print("JSON data: ");
                 Serial.println(tempData);
 
-                Serial.println("Sending data to server");
+                Serial.println("Posting data to HTTP server");
                 // post to server
                 HTTPClient http;
                 //http.begin("http://homestuff.me/devicelogs/"); 
-                http.begin("http://192.168.10.136:5000/devicelogs/"); 
+                http.begin("https://homestuff.me/devicelogs/"); 
                 http.addHeader("Content-Type", "application/json");
                 int httpCode = http.POST(tempData);
                 http.end();
@@ -653,7 +713,7 @@ void loopThermostat() {
                 //ESP.deepSleep(2e6); // 2e6 is 2 seconds
             } else {
                 Serial.println("Wifi not connected");
-                WiFi.begin(ssid, password);
+                WiFi.begin(settings.ssid.c_str(), settings.password.c_str());
                 delay(100);
             }
 
@@ -667,8 +727,23 @@ void loopThermostat() {
         
 
         if(status.webSocketConnected) {
-            webSocket.sendTXT("Temperature: " + String(status.temperature) + "°C");
-            webSocket.sendTXT("Humidity: " + String(status.humidity) + "%");
+            //String tempData = generateJsonObject2("1234567890", "2018-3-31", String(temp), String(hum));
+            String tempData = generateJsonStatusObject("1234567890", "2018-3-31", String(settings.targetTemp), String(settings.targetTempLow), String(settings.targetTempHigh), String(temp), String(hum), String(settings.mode));
+            webSocket.sendTXT(tempData);
+            Serial.println("Sending data to WS server...");
+        } else {
+            Serial.println("Websocket is not connected...");
+            WiFi.mode(WIFI_OFF);
+            WiFi.mode(WIFI_STA);
+            Serial.println("Connecting to Wifi " + String(ssid));
+            WiFi.begin(ssid, password);
+            delay(100);
+            while(WiFi.status() != WL_CONNECTED) {
+                //WiFi.begin(ssid, password);
+                delay(500);
+                //sleep = false;
+                Serial.print(".");
+            }
         }
 
         //settings.targetTemp = 24;
@@ -684,7 +759,7 @@ void loopThermostat() {
         //printTargetTemp();
         display.display();
 
-        Serial.println("turnBoilerOnOff");
+        //Serial.println("turnBoilerOnOff");
         turnBoilerOnOff(); // depends on settings.running
 
         dataChanged = false;
@@ -732,7 +807,10 @@ void setup()
     pinMode(blue, OUTPUT);
     pinMode(green, OUTPUT);
     pinMode(D0, OUTPUT);
+    
+    status.deviceState = "Initializing";
 
+    // LOAD SETTINGS FROM FILE SYSTEM
     if(!SPIFFS.begin()) {
         digitalWrite(blue, HIGH);
     } else {
@@ -746,6 +824,10 @@ void setup()
             digitalWrite(red, HIGH);
         }
     }
+    if(settings.ssid == NULL || settings.ssid == "" || settings.ssid != ssid)
+        settings.ssid = ssid;
+    if(settings.password == NULL || settings.password == "" || settings.ssid != ssid)
+        settings.password = password;
 
     float t = dht.readTemperature();
     if(!isnan(t))
@@ -754,20 +836,40 @@ void setup()
     if(!isnan(h))
         hum = h;
 
-    settings.on = false;
     turnBoilerOnOff();
     settingsChanged = true;
     tempChanged = true;
-    status.deviceState = "Initializing";
+    
 
-    WiFi.begin(ssid, password);
+    status.deviceState = "Connecting";
+    display.setFont(Lato_Thin_16);
+    display.drawString(35, 20, "Connecting...");
+    display.display();
+    Serial.println("Connecting to Wifi " + String(settings.ssid));
+    WiFi.begin(settings.ssid.c_str(), settings.password.c_str());
     delay(100);
-    while(!WiFi.status()== WL_CONNECTED) {
-        WiFi.begin(ssid, password);
-        delay(1000);
-        sleep = false;
+    int i = 0;
+    display.drawString(35, 20, "Connecting");
+    while(WiFi.status() != WL_CONNECTED) {
+        //WiFi.begin(ssid, password);
+        delay(500);
+        //sleep = false;
         Serial.print(".");
+        if(i % 3 == 0)
+            display.drawString(54, 40, ".");
+        if(i % 3 == 1)
+            display.drawString(64, 40, ".");
+        if(i % 3 == 2)
+            display.drawString(74, 40, ".");
+        display.display();
+        i++;
     }
+    Serial.println("Connected!");
+    display.drawString(35, 20, "Connected!");
+    status.deviceState = "Connected";
+    //drawSignalStrenthLarge(45, 34, 5, true);
+    display.display();
+    delay(2000);
 
     /*
     Serial.setDebugOutput(true);
@@ -775,7 +877,7 @@ void setup()
 
     // WEBSOCKETS
     // server address, port and URL
-	webSocket.begin("192.168.10.136", 8888);
+	webSocket.beginSSL("homestuff.me",443,"/");
     // event handler
     webSocket.onEvent(webSocketEvent);
     // use HTTP Basic Authorization this is optional remove if not needed
@@ -784,17 +886,6 @@ void setup()
     webSocket.setReconnectInterval(5000);
 
     //fauxmo.addDevice("relay");
-
-
-    if(status.deviceState == "Initializing") {
-        Serial.println("print welcome on screen...");
-        display.setFont(Lato_Thin_16);
-        display.drawString(35, 8, "Welcome!");
-        display.display();
-    }
-    else {
-        Serial.println("status.deviceState: " + status.deviceState);
-    }
 }
 
 void loop()

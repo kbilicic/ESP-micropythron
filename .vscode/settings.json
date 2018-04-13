@@ -1,7 +1,11 @@
 {
     "files.associations": {
         "array": "cpp",
-        "initializer_list": "cpp"
+        "initializer_list": "cpp",
+        "functional": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp"
     },
     "terminal.integrated.env.osx": {
         "PATH": "/Users/krunoslavbilicic/.platformio/penv/bin:/Users/krunoslavbilicic/.platformio/penv:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Wireshark.app/Contents/MacOS:/Users/krunoslavbilicic/Library/Android/sdk/platform-tools/:/bin:/bin:/Users/krunoslavbilicic/apache-ant-1.10.1:x/bin",
