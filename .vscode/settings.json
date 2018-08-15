@@ -5,10 +5,15 @@
         "functional": "cpp",
         "tuple": "cpp",
         "type_traits": "cpp",
-        "utility": "cpp"
+        "utility": "cpp",
+        "deque": "cpp",
+        "list": "cpp",
+        "unordered_map": "cpp",
+        "vector": "cpp"
     },
     "terminal.integrated.env.osx": {
-        "PATH": "/Users/krunoslavbilicic/.platformio/penv/bin:/Users/krunoslavbilicic/.platformio/penv:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Wireshark.app/Contents/MacOS:/Users/krunoslavbilicic/Library/Android/sdk/platform-tools/:/bin:/bin:/Users/krunoslavbilicic/apache-ant-1.10.1:x/bin",
+        "PATH": "/Users/krunoslavbilicic/.platformio/penv/bin:/Users/krunoslavbilicic/.platformio/penv:/Library/Frameworks/Python.framework/Versions/3.6/bin:/Users/krunoslavbilicic/.local/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Wireshark.app/Contents/MacOS:/Users/krunoslavbilicic/Library/Android/sdk/platform-tools/:/bin:/bin:/Users/krunoslavbilicic/apache-ant-1.10.1:x/bin",
         "PLATFORMIO_CALLER": "vscode"
-    }
+    },
+    "C_Cpp.intelliSenseEngineFallback": "Enabled"
 }
