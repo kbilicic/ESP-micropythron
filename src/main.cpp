@@ -310,6 +310,64 @@ void displayToScreen2(float temp, float hum) {
 }
 
 
+bool loadSettings(ThermostatSettings &settings) {
+    File settingsFile = SPIFFS.open("/settings.json", "r");
+    if(!settingsFile) {
+        return false;
+    }
+    size_t size = settingsFile.size();
+    std::unique_ptr<char[]> buffer(new char[size]);
+    settingsFile.readBytes(buffer.get(), size);
+    //Serial.println(buffer.get());
+
+    DynamicJsonDocument root(size);
+
+    DeserializationError parseStatus = deserializeJson(root, buffer.get());
+
+    //StaticJsonBuffer<1000> jsonBuffer;
+    //JsonObject& root = jsonBuffer.parseObject(buffer.get());
+
+    if (parseStatus != DeserializationError::Ok) {
+        Serial.println("LoadSettings.. deserializeJson() failed");
+
+        settings.on = "false";
+        settings.mode = "heat";
+        settings.targetTemp = 22;
+
+        return false;
+    } else 
+    {
+        settings.targetTemp = root["targetTemp"];
+        settings.targetTempLow = root["targetTempLow"];
+        settings.targetTempHigh = root["targetTempHigh"];
+
+        settings.mode = (const char*) root["mode"];
+        if(settings.mode == NULL)
+            settings.mode = "manual";
+        //settings.type = root["type"].asString();
+        //if(settings.type == NULL)
+        //    settings.type = "heat";
+        settings.on = (const char*) root["on"];
+        settings.apiUrl = (const char*) root["apiUrl"];
+        settings.ssid = (const char*) root["ssid"];
+        settings.password = (const char*) root["password"];
+
+        Serial.println("Loaded settings: ");
+        Serial.println("settings.targetTemp = " + settings.targetTemp);
+        Serial.println("settings.mode = " + settings.mode);
+        //Serial.println("settings.type = " + settings.type);
+        Serial.println("settings.on = " + settings.on);
+        Serial.println("settings.apiUrl = " + settings.apiUrl);
+        Serial.println("settings.ssid = " + settings.ssid);
+        Serial.println("settings.password = " + settings.password);
+    }
+
+    settingsFile.close();
+
+    return true;
+}
+
+
 bool saveSettingsFile(ThermostatSettings &settings) {
     File newSettingsFile = SPIFFS.open("/settings.json", "w");
     //StaticJsonBuffer<1000> jsonBuffer;
