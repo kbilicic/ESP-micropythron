@@ -7,7 +7,9 @@
 //#include <time.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#define ARDUINOJSON_ENABLE_ARDUINO_STRING 1
 #include <ArduinoJson.h>
+#include "Adafruit_Sensor.h"
 #include "DHT.h"
 #include "gpio.h"
 #include "FS.h"
@@ -225,9 +227,10 @@ DHT dht(DHTPIN, DHTTYPE); // GPIO14
 
 
 String generateJsonStatusObject(String deviceSn, String dateTime, String targetTemp, String targetLowTemp, String targetHighTemp, String temp, String hum, String mode) {
-    StaticJsonBuffer<250> jsonBuffer;
-    
-    JsonObject& root = jsonBuffer.createObject();
+    //StaticJsonBuffer<250> jsonBuffer;
+    DynamicJsonDocument root(250);
+
+    //JsonObject& root = jsonBuffer.createObject();
     root["sn"] = deviceSn;
     root["time"] = dateTime;
     root["temp"] = temp;
@@ -239,7 +242,9 @@ String generateJsonStatusObject(String deviceSn, String dateTime, String targetT
     root["running"] = String(status.running);
     root["event"] = status.lastEventName;
     char buffer[300];
-    root.printTo((char*)buffer, root.measureLength() + 1);
+
+    serializeJson(root, buffer);
+    //root.printTo((char*)buffer, root.measureLength() + 1);
 
     return String(buffer);
 }
@@ -305,62 +310,12 @@ void displayToScreen2(float temp, float hum) {
 }
 
 
-bool loadSettings(ThermostatSettings &settings) {
-    File settingsFile = SPIFFS.open("/settings.json", "r");
-    if(!settingsFile) {
-        return false;
-    }
-    size_t size = settingsFile.size();
-    std::unique_ptr<char[]> buffer(new char[size]);
-    settingsFile.readBytes(buffer.get(), size);
-    //Serial.println(buffer.get());
-
-    StaticJsonBuffer<1000> jsonBuffer;
-    JsonObject& root = jsonBuffer.parseObject(buffer.get());
-
-    if (!root.success()) {
-        Serial.println("parseObject() failed");
-
-        settings.on = "false";
-        settings.mode = "heat";
-        settings.targetTemp = 22;
-
-        return false;
-    } else {
-        settings.targetTemp = root["targetTemp"];
-        settings.targetTempLow = root["targetTempLow"];
-        settings.targetTempHigh = root["targetTempHigh"];
-
-        settings.mode = root["mode"].asString();
-        if(settings.mode == NULL)
-            settings.mode = "manual";
-        //settings.type = root["type"].asString();
-        //if(settings.type == NULL)
-        //    settings.type = "heat";
-        settings.on = root["on"].asString();
-        settings.apiUrl = root["apiUrl"].asString();
-        settings.ssid = root["ssid"].asString();
-        settings.password = root["password"].asString();
-
-        Serial.println("Loaded settings: ");
-        Serial.println("settings.targetTemp = " + settings.targetTemp);
-        Serial.println("settings.mode = " + settings.mode);
-        //Serial.println("settings.type = " + settings.type);
-        Serial.println("settings.on = " + settings.on);
-        Serial.println("settings.apiUrl = " + settings.apiUrl);
-        Serial.println("settings.ssid = " + settings.ssid);
-        Serial.println("settings.password = " + settings.password);
-    }
-
-    settingsFile.close();
-
-    return true;
-}
-
 bool saveSettingsFile(ThermostatSettings &settings) {
     File newSettingsFile = SPIFFS.open("/settings.json", "w");
-    StaticJsonBuffer<1000> jsonBuffer;
-    JsonObject& root = jsonBuffer.createObject();
+    //StaticJsonBuffer<1000> jsonBuffer;
+    DynamicJsonDocument root(1024);
+
+    //JsonObject& root = jsonBuffer.createObject();
     root["apiUrl"]      = settings.apiUrl;
     root["mode"]        = settings.mode;
     root["password"]    = settings.password;
@@ -370,7 +325,8 @@ bool saveSettingsFile(ThermostatSettings &settings) {
     root["targetTempLow"]  = settings.targetTempLow;
     root["targetTempHigh"]  = settings.targetTempHigh;
 
-    root.printTo(newSettingsFile);
+    //root.printTo(newSettingsFile);
+    serializeJson(root, newSettingsFile);
     newSettingsFile.flush();
     newSettingsFile.close();
     //Serial.println("Changes saved to memory.");
@@ -459,30 +415,36 @@ void changeMode(String newMode) {
 }
 
 String getCurrentTime() {
-    StaticJsonBuffer<300> jsonBuffer;
-    jsonBuffer.clear();
-    JsonObject& jsonObj = jsonBuffer.parseObject(status.dateTimeString);
+    DynamicJsonDocument jsonObj(1024);
+    //StaticJsonBuffer<300> jsonBuffer;
+    //jsonBuffer.clear();
+    //JsonObject& jsonObj = jsonBuffer.parseObject(status.dateTimeString);
+    deserializeJson(jsonObj, status.dateTimeString);
     //jsonObj["hour"] = uint32.parseObject(jsonObj["hour"]) + 2;
-    Serial.println(jsonObj["hour"].asString());
-    return jsonObj["hour"].asString();
+    Serial.println( (const char*) jsonObj["hour"]);
+    return (const char*) jsonObj["hour"];
 }
 
 void processPayload(uint8_t *payload) {
-    StaticJsonBuffer<300> jsonBuffer;
-    jsonBuffer.clear();
-    JsonObject& jsonObj = jsonBuffer.parseObject(payload);
+    //StaticJsonBuffer<300> jsonBuffer;
+    DynamicJsonDocument jsonObj(300);
+
+    //jsonBuffer.clear();
+    //JsonObject& jsonObj = jsonBuffer.parseObject(payload);
+    /*
     if (!jsonObj.success()) {
         Serial.println("parseObject() failed");
         return;
-    } else {
-        status.dateTimeString = jsonObj["dateTimeJson"].asString();
-        Serial.println("time: " + status.dateTimeString);
+    } else*/ 
+    {
+        status.dateTimeString = (const char*) jsonObj["dateTimeJson"];
+        //Serial.println("time: " + status.dateTimeString);
         
         //status.time
-        String temp = jsonObj["temp"].asString();
-        String mode = jsonObj["mode"].asString();
+        String temp = (const char*) jsonObj["temp"];
+        String mode = (const char*) jsonObj["mode"];
         //String type = jsonObj["type"].asString();
-        String status_on = jsonObj["on"].asString();
+        String status_on = (const char*) jsonObj["on"];
 
         Serial.println("temp: " + temp);
         Serial.println("mode: " + mode);
@@ -926,13 +888,13 @@ void setup()
         Serial.println("...");
         Serial.print("Loading settings file...");
 
-        if(loadSettings(settings)) {
+        /*if(loadSettings(settings)) {
             //digitalWrite(green, HIGH);
             Serial.println("Ok");
         } else {
             //digitalWrite(red, HIGH);
             Serial.println("Error");
-        }
+        }*/
     }
     if(settings.ssid == NULL || settings.ssid == "" || settings.ssid != ssid)
         settings.ssid = ssid;
