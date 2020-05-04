@@ -1,0 +1,80 @@
+import machine
+from machine import Pin
+import network
+import time, math
+import sys
+import ujson
+from time import sleep
+from Thermostat import SHT21
+from Thermostat import ssd1306
+import uwebsockets.client
+
+if machine.reset_cause() == machine.DEEPSLEEP_RESET:
+    print('woke from a deep sleep')
+else:
+    print('power on or hard reset')
+
+
+
+# Start up I2C
+i2c = machine.I2C(sda=machine.Pin(21), scl=machine.Pin(22), freq=400000)
+
+sens = SHT21.SHT21(i2c)
+hum = sens.get_humd()
+tem = sens.get_temp()
+
+
+oled_width = 128
+oled_height = 64
+oled = ssd1306.SSD1306_I2C(oled_width, oled_height, i2c)
+
+oled.text("Temp: {0}".format(tem), 0, 0)
+oled.text("Hum: {0}".format(hum), 0, 20)
+        
+oled.show()
+
+
+
+sleep(2)
+
+
+# list all networks and connect to a saved network #################################
+wlan = network.WLAN(network.STA_IF)
+wlan.active(True)
+
+wlan.connect("Octofus" , "Rocket999" ) 
+
+print('\nConnected, network config:', wlan.ifconfig())
+print("")
+########################################################################################3
+
+
+
+
+print("Temp: {0}".format(tem))
+print("Hum: {0}".format(hum))
+
+led = Pin (2, Pin.OUT)
+
+#blink LED
+led.value(1)
+sleep(0.1)
+led.value(0)
+sleep(0.5)
+led.value(1)
+sleep(0.1)
+led.value(0)
+sleep(0.5)
+led.value(1)
+sleep(0.1)
+led.value(0)
+sleep(0.5)
+
+# wait 5 seconds so that you can catch the ESP awake to establish a serial communication later
+# you should remove this sleep line in your final script
+sleep(1)
+
+print('>>>>>> going to sleep <<<<<<')
+
+#sleep for 10 seconds (10000 milliseconds)
+#machine.deepsleep(60000)

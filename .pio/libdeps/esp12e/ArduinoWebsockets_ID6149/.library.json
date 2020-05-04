@@ -1,0 +1,37 @@
+{
+    "name": "ArduinoWebsockets", 
+    "version": "0.4.8", 
+    "keywords": [
+        "communication"
+    ], 
+    "description": "A library for writing modern Websockets applications with Arduino.", 
+    "frameworks": [
+        "arduino"
+    ], 
+    "platforms": [], 
+    "authors": [
+        {
+            "email": "mail.gilmaimon@gmail.com", 
+            "url": null, 
+            "maintainer": true, 
+            "name": "Gil Maimon"
+        }
+    ], 
+    "repository": {
+        "type": "git", 
+        "url": "https://github.com/gilmaimon/ArduinoWebsockets"
+    }, 
+    "homepage": null, 
+    "export": {
+        "include": null, 
+        "exclude": [
+            "extras", 
+            "docs", 
+            "tests", 
+            "test", 
+            "*.doxyfile", 
+            "*.pdf"
+        ]
+    }, 
+    "id": 6149
+}

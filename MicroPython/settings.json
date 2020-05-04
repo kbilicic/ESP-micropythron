@@ -1,0 +1,7 @@
+{
+    "configured" : false,
+    "networks" : [
+        { "ssid": "Octofus", "pass" : "Rocket999" },
+        { "ssid": "B.net_97150", "pass" : "urhqew298xia" }
+    ]
+}
