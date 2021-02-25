@@ -136,8 +136,6 @@ print("")
 htu = HTU21D.HTU21D(i2c, read_delay=2)  # read_delay=2 for test purposes
 
 
-        
-
 async def main():
     await htu
 
@@ -154,9 +152,6 @@ async def main():
     
 
     while True:
-        fstr = 'Temp {:.2f} Humidity {:.2f}'
-        #print(fstr.format(htu.temperature, htu.humidity))
-
         values = '{ "sn" : "%s", "temp" : "%.2f", "hum" : "%.2f", "mode" : "%s", "running" : "%s" }' % (serial_number, htu.temperature, htu.humidity, mode, running)
         
         #websocket = uwebsockets.client.connect(uri)
